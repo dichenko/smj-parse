@@ -26,8 +26,13 @@ MODULE_URLS = {
 }
 
 # Login credentials
-USERNAME = "Mixail_IT"
-PASSWORD = "IT_Mixail"
+# Load from environment variables or .env file
+from dotenv import load_dotenv
+load_dotenv()
+
+import os
+USERNAME = os.getenv("SMARTJ_USERNAME")
+PASSWORD = os.getenv("SMARTJ_PASSWORD")
 
 # HTTP headers
 HEADERS = {
