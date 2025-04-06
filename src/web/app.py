@@ -4,7 +4,7 @@ Web interface for Smart-J Data Collector.
 from flask import Flask, render_template, request, jsonify
 import os
 from src.config import WEB_HOST, WEB_PORT, ITEMS_PER_PAGE
-from src.database.operations import get_modules, get_cities, get_lessons
+from src.database.operations import get_cities, get_lessons
 
 app = Flask(__name__)
 
@@ -13,13 +13,26 @@ template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'template
 app.template_folder = template_dir
 
 @app.route('/')
-def index():
-    """Main page."""
-    # Get modules and cities for filters
-    modules = get_modules()
+@app.route('/matata')
+def matata():
+    """Matata module page."""
+    # Get cities for filters
     cities = get_cities()
+    return render_template('index.html', cities=cities)
 
-    return render_template('index.html', modules=modules, cities=cities)
+@app.route('/kids')
+def kids():
+    """Kids module page."""
+    # Get cities for filters
+    cities = get_cities()
+    return render_template('index.html', cities=cities)
+
+@app.route('/junior')
+def junior():
+    """JUnior module page."""
+    # Get cities for filters
+    cities = get_cities()
+    return render_template('index.html', cities=cities)
 
 @app.route('/api/lessons')
 def api_lessons():
@@ -81,6 +94,16 @@ def create_index_template():
     <style>
         body {
             padding: 20px;
+            transition: background-color 0.3s ease;
+        }
+        body.matata {
+            background-color: #f8f9fa;
+        }
+        body.kids {
+            background-color: #f0f8ff;
+        }
+        body.junior {
+            background-color: #fff8f0;
         }
         .filter-container {
             margin-bottom: 20px;
@@ -90,23 +113,52 @@ def create_index_template():
             display: flex;
             justify-content: center;
         }
+        .module-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .btn-matata {
+            background-color: #007bff;
+            border-color: #007bff;
+            color: white;
+        }
+        .btn-kids {
+            background-color: #28a745;
+            border-color: #28a745;
+            color: white;
+        }
+        .btn-junior {
+            background-color: #fd7e14;
+            border-color: #fd7e14;
+            color: white;
+        }
+        .btn-matata.active, .btn-matata:hover {
+            background-color: #0069d9;
+            border-color: #0062cc;
+        }
+        .btn-kids.active, .btn-kids:hover {
+            background-color: #218838;
+            border-color: #1e7e34;
+        }
+        .btn-junior.active, .btn-junior:hover {
+            background-color: #e96b02;
+            border-color: #d96300;
+        }
     </style>
 </head>
-<body>
+<body class="matata">
     <div class="container">
         <h1 class="mb-4">Просмотр данных о занятиях</h1>
 
+        <div class="module-buttons">
+            <a href="/matata" class="btn btn-matata active" id="btn-matata">Matata</a>
+            <a href="/kids" class="btn btn-kids" id="btn-kids">Kids</a>
+            <a href="/junior" class="btn btn-junior" id="btn-junior">JUnior</a>
+        </div>
+
         <div class="filter-container row">
-            <div class="col-md-4">
-                <label for="module-select" class="form-label">Модуль:</label>
-                <select id="module-select" class="form-select">
-                    <option value="">Все модули</option>
-                    {% for module in modules %}
-                    <option value="{{ module['id'] }}">{{ module['name'] }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <label for="city-select" class="form-label">Город:</label>
                 <select id="city-select" class="form-select">
                     <option value="">Все города</option>
@@ -115,7 +167,7 @@ def create_index_template():
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-4 d-flex align-items-end">
+            <div class="col-md-6 d-flex align-items-end">
                 <button id="apply-filters" class="btn btn-primary">Применить фильтры</button>
             </div>
         </div>
@@ -124,16 +176,15 @@ def create_index_template():
             <table class="table table-striped table-hover">
                 <thead>
                     <tr>
-                        <th>Модуль</th>
                         <th>Тема</th>
                         <th>Город</th>
                         <th>Преподаватель</th>
                         <th>Дата</th>
-                        <th>Группа</th>
+                        <th>Дополнительная информация</th>
                     </tr>
                 </thead>
                 <tbody id="lessons-table-body">
-                    <!-- Data will be loaded with JavaScript -->
+                    <!-- Данные будут загружены с помощью JavaScript -->
                 </tbody>
             </table>
         </div>
@@ -141,44 +192,52 @@ def create_index_template():
         <div class="pagination-container">
             <nav aria-label="Навигация по страницам">
                 <ul class="pagination" id="pagination">
-                    <!-- Pagination will be created with JavaScript -->
+                    <!-- Пагинация будет создана с помощью JavaScript -->
                 </ul>
             </nav>
         </div>
     </div>
 
     <script>
-        // Current page
+        // Текущая страница
         let currentPage = 1;
-        // Items per page
+        // Количество записей на странице
         const perPage = 10;
 
-        // Function to load lessons
+        // Получаем текущий модуль из URL
+        function getCurrentModule() {
+            const path = window.location.pathname;
+            if (path.includes('/kids')) return 2;
+            if (path.includes('/junior')) return 3;
+            return 1; // По умолчанию Matata
+        }
+
+        // Функция для загрузки данных
         function loadLessons() {
-            const moduleId = document.getElementById('module-select').value;
+            const moduleId = getCurrentModule();
             const cityId = document.getElementById('city-select').value;
 
-            // Build API URL
+            // Формируем URL для API
             let url = `/api/lessons?page=${currentPage}&per_page=${perPage}`;
-            if (moduleId) url += `&module_id=${moduleId}`;
+            url += `&module_id=${moduleId}`;
             if (cityId) url += `&city_id=${cityId}`;
 
-            // Make API request
+            // Выполняем запрос к API
             fetch(url)
                 .then(response => response.json())
                 .then(data => {
-                    // Update table
+                    // Обновляем таблицу
                     updateTable(data.lessons);
-                    // Update pagination
+                    // Обновляем пагинацию
                     updatePagination(data.pagination);
                 })
                 .catch(error => {
-                    console.error('Error loading data:', error);
-                    alert('An error occurred while loading data. Please try again later.');
+                    console.error('Ошибка при загрузке данных:', error);
+                    alert('Произошла ошибка при загрузке данных. Пожалуйста, попробуйте позже.');
                 });
         }
 
-        // Function to update table
+        // Функция для обновления таблицы
         function updateTable(lessons) {
             const tableBody = document.getElementById('lessons-table-body');
             tableBody.innerHTML = '';
@@ -186,7 +245,7 @@ def create_index_template():
             if (lessons.length === 0) {
                 const row = document.createElement('tr');
                 const cell = document.createElement('td');
-                cell.colSpan = 6;
+                cell.colSpan = 5; // Уменьшили на 1, так как убрали столбец Модуль
                 cell.textContent = 'Нет данных для отображения';
                 cell.className = 'text-center';
                 row.appendChild(cell);
@@ -197,45 +256,40 @@ def create_index_template():
             lessons.forEach(lesson => {
                 const row = document.createElement('tr');
 
-                // Module
-                const moduleCell = document.createElement('td');
-                moduleCell.textContent = lesson.module_name;
-                row.appendChild(moduleCell);
-
-                // Topic
+                // Тема
                 const topicCell = document.createElement('td');
                 topicCell.textContent = lesson.topic_title;
                 row.appendChild(topicCell);
 
-                // City
+                // Город
                 const cityCell = document.createElement('td');
                 cityCell.textContent = lesson.city_name;
                 row.appendChild(cityCell);
 
-                // Teacher
+                // Преподаватель
                 const teacherCell = document.createElement('td');
                 teacherCell.textContent = lesson.teacher_name;
                 row.appendChild(teacherCell);
 
-                // Date
+                // Дата
                 const dateCell = document.createElement('td');
                 dateCell.textContent = formatDate(lesson.date);
                 row.appendChild(dateCell);
 
-                // Group
-                const groupCell = document.createElement('td');
-                groupCell.textContent = lesson.group_name || '';
-                row.appendChild(groupCell);
+                // Дополнительная информация
+                const infoCell = document.createElement('td');
+                infoCell.textContent = lesson.group_name || '';
+                row.appendChild(infoCell);
 
                 tableBody.appendChild(row);
             });
         }
 
-        // Function to format date
+        // Функция для форматирования даты
         function formatDate(dateStr) {
             if (!dateStr) return '';
 
-            // Assuming date is in YYYY-MM-DD format
+            // Предполагаем, что дата в формате YYYY-MM-DD
             const parts = dateStr.split('-');
             if (parts.length === 3) {
                 return `${parts[2]}.${parts[1]}.${parts[0]}`;
@@ -244,17 +298,17 @@ def create_index_template():
             return dateStr;
         }
 
-        // Function to update pagination
+        // Функция для обновления пагинации
         function updatePagination(pagination) {
             const paginationElement = document.getElementById('pagination');
             paginationElement.innerHTML = '';
 
-            // If only one page, don't show pagination
+            // Если всего одна страница, не показываем пагинацию
             if (pagination.total_pages <= 1) {
                 return;
             }
 
-            // Previous button
+            // Кнопка "Предыдущая"
             const prevItem = document.createElement('li');
             prevItem.className = `page-item ${pagination.current_page === 1 ? 'disabled' : ''}`;
             const prevLink = document.createElement('a');
@@ -271,12 +325,12 @@ def create_index_template():
             prevItem.appendChild(prevLink);
             paginationElement.appendChild(prevItem);
 
-            // Page numbers
-            const maxPages = 5; // Maximum number of page numbers to display
+            // Номера страниц
+            const maxPages = 5; // Максимальное количество номеров страниц для отображения
             let startPage = Math.max(1, pagination.current_page - Math.floor(maxPages / 2));
             let endPage = Math.min(pagination.total_pages, startPage + maxPages - 1);
 
-            // Adjust startPage if endPage reached maximum
+            // Корректируем startPage, если endPage достиг максимума
             startPage = Math.max(1, endPage - maxPages + 1);
 
             for (let i = startPage; i <= endPage; i++) {
@@ -295,7 +349,7 @@ def create_index_template():
                 paginationElement.appendChild(pageItem);
             }
 
-            // Next button
+            // Кнопка "Следующая"
             const nextItem = document.createElement('li');
             nextItem.className = `page-item ${pagination.current_page === pagination.total_pages ? 'disabled' : ''}`;
             const nextLink = document.createElement('a');
@@ -313,14 +367,38 @@ def create_index_template():
             paginationElement.appendChild(nextItem);
         }
 
-        // Event handler for "Apply filters" button
+        // Обработчик события для кнопки "Применить фильтры"
         document.getElementById('apply-filters').addEventListener('click', () => {
-            currentPage = 1; // Reset to first page when changing filters
+            currentPage = 1; // Сбрасываем на первую страницу при изменении фильтров
             loadLessons();
         });
 
-        // Load lessons when page loads
+        // Функция для установки активной кнопки модуля
+        function setActiveModuleButton() {
+            const path = window.location.pathname;
+            document.body.className = ''; // Сбрасываем класс body
+
+            // Удаляем класс active у всех кнопок
+            document.getElementById('btn-matata').classList.remove('active');
+            document.getElementById('btn-kids').classList.remove('active');
+            document.getElementById('btn-junior').classList.remove('active');
+
+            // Устанавливаем активную кнопку и класс для body в зависимости от URL
+            if (path.includes('/kids')) {
+                document.getElementById('btn-kids').classList.add('active');
+                document.body.classList.add('kids');
+            } else if (path.includes('/junior')) {
+                document.getElementById('btn-junior').classList.add('active');
+                document.body.classList.add('junior');
+            } else {
+                document.getElementById('btn-matata').classList.add('active');
+                document.body.classList.add('matata');
+            }
+        }
+
+        // Загружаем данные при загрузке страницы
         document.addEventListener('DOMContentLoaded', () => {
+            setActiveModuleButton();
             loadLessons();
         });
     </script>
