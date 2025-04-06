@@ -22,7 +22,7 @@ LOGIN_URL = f"{BASE_URL}/login"
 MODULE_URLS = {
     'Matata': f"{BASE_URL}/r1869~plan/kt-plan-report/l:33/",
     'Kids': f"{BASE_URL}/r1869~plan/kt-plan-report/l:55/",
-    'JUnior': f"{BASE_URL}/r1869~plan/kt-plan-report/l:56/"
+    'Junior': f"{BASE_URL}/r1869~plan/kt-plan-report/l:56/"
 }
 
 # Login credentials

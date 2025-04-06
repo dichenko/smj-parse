@@ -1,10 +1,11 @@
 """
 Web interface for Smart-J Data Collector.
 """
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect
+import datetime
 import os
 from src.config import WEB_HOST, WEB_PORT, ITEMS_PER_PAGE
-from src.database.operations import get_cities, get_lessons
+from src.database.operations import get_cities, get_lessons, get_weekly_lessons
 
 app = Flask(__name__)
 
@@ -13,6 +14,10 @@ template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'template
 app.template_folder = template_dir
 
 @app.route('/')
+def index():
+    """Redirect to Matata page."""
+    return redirect('/matata')
+
 @app.route('/matata')
 def matata():
     """Matata module page."""
@@ -29,10 +34,185 @@ def kids():
 
 @app.route('/junior')
 def junior():
-    """JUnior module page."""
+    """Junior module page."""
     # Get cities for filters
     cities = get_cities()
     return render_template('index.html', cities=cities)
+
+@app.route('/weekly')
+@app.route('/weekly/<start_date>')
+def weekly(start_date=None):
+    """Weekly report page.
+
+    Args:
+        start_date (str, optional): Start date of the week in format 'YYYY-MM-DD'.
+            If not provided, the most recent completed week is used.
+    """
+    today = datetime.date.today()
+
+    if start_date:
+        # Parse the provided start date
+        try:
+            year, month, day = map(int, start_date.split('-'))
+            start_date = datetime.date(year, month, day)
+            # Ensure the start date is a Monday
+            if start_date.weekday() != 0:  # Monday is 0
+                # Find the Monday of that week
+                start_date = start_date - datetime.timedelta(days=start_date.weekday())
+            # End date is the Sunday after start_date
+            end_date = start_date + datetime.timedelta(days=6)  # Sunday
+        except (ValueError, TypeError):
+            # If invalid date format, use the most recent completed week
+            start_date = None
+
+    if not start_date:
+        # Calculate last week's date range (Monday to Sunday)
+        # If today is Monday, we want last week
+        if today.weekday() == 0:  # Monday is 0
+            end_date = today - datetime.timedelta(days=1)  # Sunday
+        else:
+            # Find the most recent Sunday
+            days_since_sunday = today.weekday() + 1 if today.weekday() > 0 else 7
+            end_date = today - datetime.timedelta(days=days_since_sunday)
+
+        # Start date is the Monday before end_date
+        start_date = end_date - datetime.timedelta(days=6)  # Monday
+
+    # Generate a list of available weeks (12 weeks back from today)
+    available_weeks = []
+
+    # Find the most recent completed week's start date (Monday)
+    if today.weekday() == 0:  # If today is Monday
+        most_recent_monday = today - datetime.timedelta(days=7)  # Last Monday
+    else:
+        days_since_monday = today.weekday()
+        most_recent_monday = today - datetime.timedelta(days=days_since_monday)
+
+    current_week_start = most_recent_monday
+    for i in range(12):  # Show up to 12 weeks
+        week_end = current_week_start + datetime.timedelta(days=6)
+
+        # Skip future weeks
+        if current_week_start > today:
+            break
+
+        # Add week to the list
+        available_weeks.append({
+            'start_date': current_week_start.strftime('%Y-%m-%d'),
+            'end_date': week_end.strftime('%Y-%m-%d'),
+            'display': f"{current_week_start.strftime('%d.%m.%Y')} - {week_end.strftime('%d.%m.%Y')}",
+            'active': current_week_start == start_date
+        })
+
+        # Move to the previous week
+        current_week_start = current_week_start - datetime.timedelta(days=7)
+
+    # Format dates for database query
+    start_date_str = start_date.strftime('%Y-%m-%d')
+    end_date_str = end_date.strftime('%Y-%m-%d')
+
+    # Get weekly lessons
+    weekly_data = get_weekly_lessons(start_date_str, end_date_str)
+
+    # Generate calendar data for the month containing the selected week
+    calendar_data = generate_calendar_data(start_date, end_date)
+
+    return render_template('weekly.html',
+                           weekly_data=weekly_data,
+                           start_date=start_date.strftime('%d.%m.%Y'),
+                           end_date=end_date.strftime('%d.%m.%Y'),
+                           available_weeks=available_weeks,
+                           calendar_data=calendar_data,
+                           selected_start_date=start_date_str)
+
+def generate_calendar_data(start_date, end_date):
+    """Generate calendar data for the month(s) containing the selected week.
+
+    Args:
+        start_date (datetime.date): Start date of the selected week
+        end_date (datetime.date): End date of the selected week
+
+    Returns:
+        list: List of calendar data for each month
+    """
+    # Check if the week spans two months
+    spans_two_months = start_date.month != end_date.month
+
+    # List to store calendar data for each month
+    calendars = []
+
+    # Function to generate calendar for a specific month
+    def generate_month_calendar(year, month, start_date, end_date):
+        # Get the first day of the month
+        first_day = datetime.date(year, month, 1)
+
+        # Get the last day of the month
+        if month == 12:
+            last_day = datetime.date(year + 1, 1, 1) - datetime.timedelta(days=1)
+        else:
+            last_day = datetime.date(year, month + 1, 1) - datetime.timedelta(days=1)
+
+        # Get the weekday of the first day (0 = Monday, 6 = Sunday)
+        first_weekday = first_day.weekday()
+
+        # Calculate the number of days in the month
+        days_in_month = last_day.day
+
+        # Generate calendar grid
+        calendar_grid = []
+        day = 1
+
+        # Add empty cells for days before the first day of the month
+        for i in range(first_weekday):
+            calendar_grid.append({
+                'day': None,
+                'in_selected_week': False,
+                'is_today': False
+            })
+
+        # Add cells for each day of the month
+        today = datetime.date.today()
+        for i in range(days_in_month):
+            current_date = datetime.date(year, month, day)
+            calendar_grid.append({
+                'day': day,
+                'in_selected_week': start_date <= current_date <= end_date,
+                'is_today': current_date == today
+            })
+            day += 1
+
+        # Add empty cells for days after the last day of the month
+        while len(calendar_grid) % 7 != 0:
+            calendar_grid.append({
+                'day': None,
+                'in_selected_week': False,
+                'is_today': False
+            })
+
+        # Split the grid into weeks
+        weeks = []
+        for i in range(0, len(calendar_grid), 7):
+            weeks.append(calendar_grid[i:i+7])
+
+        # Get month name
+        month_name = datetime.date(year, month, 1).strftime('%B %Y')
+
+        return {
+            'month_name': month_name,
+            'weeks': weeks
+        }
+
+    if spans_two_months:
+        # If the week spans two months, generate calendars for both months
+        # Add the end_date month first (newer month)
+        calendars.append(generate_month_calendar(end_date.year, end_date.month, start_date, end_date))
+        # Then add the start_date month (older month)
+        calendars.append(generate_month_calendar(start_date.year, start_date.month, start_date, end_date))
+    else:
+        # If the week is within a single month, generate just one calendar
+        calendars.append(generate_month_calendar(start_date.year, start_date.month, start_date, end_date))
+
+    return calendars
 
 @app.route('/api/lessons')
 def api_lessons():

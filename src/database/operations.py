@@ -116,8 +116,9 @@ def get_cities():
     conn.close()
     return cities
 
-def get_lessons(module_id=None, city_id=None, page=1, per_page=10):
+def get_lessons(module_id=None, city_id=None, page=1, per_page=10, start_date=None, end_date=None):
     """Get lessons with pagination and filtering."""
+    # start_date and end_date should be in format 'YYYY-MM-DD'
     conn = get_connection()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -150,6 +151,14 @@ def get_lessons(module_id=None, city_id=None, page=1, per_page=10):
     if city_id:
         query += ' AND l.city_id = ?'
         params.append(city_id)
+
+    if start_date:
+        query += ' AND l.date >= ?'
+        params.append(start_date)
+
+    if end_date:
+        query += ' AND l.date <= ?'
+        params.append(end_date)
 
     # Add sorting by date (newest first)
     query += ' ORDER BY l.date DESC'
@@ -211,3 +220,76 @@ def get_database_stats():
 
     conn.close()
     return stats
+
+def get_weekly_lessons(start_date, end_date):
+    """Get lessons for weekly report.
+
+    Args:
+        start_date (str): Start date in format 'YYYY-MM-DD'
+        end_date (str): End date in format 'YYYY-MM-DD'
+
+    Returns:
+        dict: Lessons grouped by city and module
+    """
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # Get all cities in alphabetical order
+    cursor.execute("SELECT id, name FROM cities ORDER BY name")
+    cities = cursor.fetchall()
+
+    # Get all modules
+    cursor.execute("SELECT id, name FROM modules ORDER BY id")
+    modules = cursor.fetchall()
+
+    # Initialize result structure
+    result = {}
+    for city in cities:
+        city_id = city['id']
+        city_name = city['name']
+        result[city_name] = {}
+
+        for module in modules:
+            module_id = module['id']
+            module_name = module['name']
+
+            # Get lessons for this city and module in the date range
+            query = '''
+            SELECT
+                l.id,
+                m.name as module_name,
+                t.title as topic_title,
+                c.name as city_name,
+                tc.name as teacher_name,
+                l.date,
+                l.group_name
+            FROM lessons l
+            JOIN topics t ON l.topic_id = t.id
+            JOIN modules m ON t.module_id = m.id
+            JOIN cities c ON l.city_id = c.id
+            JOIN teachers tc ON l.teacher_id = tc.id
+            WHERE l.city_id = ? AND t.module_id = ? AND l.date >= ? AND l.date <= ?
+            ORDER BY l.date
+            '''
+
+            cursor.execute(query, (city_id, module_id, start_date, end_date))
+            lessons = cursor.fetchall()
+
+            # Convert to list of dicts
+            lessons_list = []
+            for lesson in lessons:
+                lessons_list.append({
+                    'id': lesson['id'],
+                    'module_name': lesson['module_name'],
+                    'topic_title': lesson['topic_title'],
+                    'city_name': lesson['city_name'],
+                    'teacher_name': lesson['teacher_name'],
+                    'date': lesson['date'],
+                    'group_name': lesson['group_name']
+                })
+
+            result[city_name][module_name] = lessons_list
+
+    conn.close()
+    return result
