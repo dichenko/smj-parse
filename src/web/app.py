@@ -304,7 +304,7 @@ def create_index_template():
             color: white;
         }
         .btn-kids {
-            background-color: #28a745;
+            background-color: #28a745; 
             border-color: #28a745;
             color: white;
         }
