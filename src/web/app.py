@@ -351,7 +351,11 @@ def api_teacher_lessons():
             continue
         
         # Query for lessons of this module with pagination
-        module_query = base_query + ' AND t.module_id = ? LIMIT ? OFFSET ?'
+        if 'WHERE' in base_query:
+            module_query = base_query + ' AND t.module_id = ? LIMIT ? OFFSET ?'
+        else:
+            module_query = base_query + ' WHERE t.module_id = ? LIMIT ? OFFSET ?'
+            
         module_params = params.copy()
         module_params.append(module['id'])
         module_params.append(per_page)
