@@ -261,6 +261,8 @@ def api_teacher_lessons():
     # Get request parameters
     teacher_id = request.args.get('teacher_id', type=int)
     city_id = request.args.get('city_id', type=int)
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', ITEMS_PER_PAGE, type=int)
     
     if not teacher_id:
         return jsonify({'error': 'Teacher ID is required'}), 400
@@ -279,7 +281,8 @@ def api_teacher_lessons():
     
     teacher_name = teacher['name']
     
-    query = '''
+    # Base query without pagination (for counting total lessons)
+    base_query = '''
     SELECT
         l.id,
         m.id as module_id,
@@ -300,48 +303,74 @@ def api_teacher_lessons():
     params = [teacher_id]
     
     if city_id:
-        query += ' AND l.city_id = ?'
+        base_query += ' AND l.city_id = ?'
         params.append(city_id)
     
     # Add sorting by date (newest first)
-    query += ' ORDER BY l.date DESC'
-    
-    cursor.execute(query, params)
-    lessons = cursor.fetchall()
-    
-    # Group lessons by module
-    modules = {}
+    base_query += ' ORDER BY l.date DESC'
     
     # Get all modules first
     cursor.execute("SELECT id, name FROM modules ORDER BY id")
     all_modules = cursor.fetchall()
     
+    # Initialize modules structure
+    modules = {}
     for module in all_modules:
-        modules[module['name']] = {
-            'count': 0,
+        module_name = module['name']
+        
+        # Count total lessons for this module
+        count_query = f'''
+        SELECT COUNT(*) as count
+        FROM lessons l
+        JOIN topics t ON l.topic_id = t.id
+        WHERE l.teacher_id = ? AND t.module_id = ?
+        '''
+        count_params = [teacher_id, module['id']]
+        
+        if city_id:
+            count_query += ' AND l.city_id = ?'
+            count_params.append(city_id)
+        
+        cursor.execute(count_query, count_params)
+        total_count = cursor.fetchone()['count']
+        
+        # Calculate total pages
+        total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 1
+        
+        # Initialize module data
+        modules[module_name] = {
+            'count': total_count,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': total_pages,
             'lessons': []
         }
-    
-    # Add lessons to their modules
-    for lesson in lessons:
-        module_name = lesson['module_name']
         
-        if module_name not in modules:
-            modules[module_name] = {
-                'count': 0,
-                'lessons': []
-            }
+        # Skip query if there are no lessons for this module
+        if total_count == 0:
+            continue
         
-        modules[module_name]['count'] += 1
-        modules[module_name]['lessons'].append({
-            'id': lesson['id'],
-            'module_name': lesson['module_name'],
-            'topic_title': lesson['topic_title'],
-            'city_name': lesson['city_name'],
-            'teacher_name': lesson['teacher_name'],
-            'date': lesson['date'],
-            'group_name': lesson['group_name']
-        })
+        # Query for lessons of this module with pagination
+        module_query = base_query + ' AND t.module_id = ? LIMIT ? OFFSET ?'
+        module_params = params.copy()
+        module_params.append(module['id'])
+        module_params.append(per_page)
+        module_params.append((page - 1) * per_page)
+        
+        cursor.execute(module_query, module_params)
+        module_lessons = cursor.fetchall()
+        
+        # Add lessons to their modules
+        for lesson in module_lessons:
+            modules[module_name]['lessons'].append({
+                'id': lesson['id'],
+                'module_name': lesson['module_name'],
+                'topic_title': lesson['topic_title'],
+                'city_name': lesson['city_name'],
+                'teacher_name': lesson['teacher_name'],
+                'date': lesson['date'],
+                'group_name': lesson['group_name']
+            })
     
     conn.close()
     
