@@ -128,6 +128,38 @@ def get_teachers():
     conn.close()
     return teachers
 
+def get_teachers_by_city(city_id=None):
+    """Get teachers filtered by city.
+    
+    Args:
+        city_id (int, optional): City ID to filter by. If None, returns all teachers.
+        
+    Returns:
+        list: List of teachers dictionaries with id and name.
+    """
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    if city_id:
+        # Get teachers who taught in this city
+        query = """
+        SELECT DISTINCT t.id, t.name
+        FROM teachers t
+        JOIN lessons l ON t.id = l.teacher_id
+        WHERE l.city_id = ?
+        ORDER BY t.name
+        """
+        cursor.execute(query, (city_id,))
+    else:
+        # Get all teachers
+        cursor.execute("SELECT id, name FROM teachers ORDER BY name")
+        
+    teachers = cursor.fetchall()
+    
+    conn.close()
+    return teachers
+
 def get_lessons(module_id=None, city_id=None, page=1, per_page=10, start_date=None, end_date=None):
     """Get lessons with pagination and filtering."""
     # start_date and end_date should be in format 'YYYY-MM-DD'

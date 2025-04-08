@@ -6,7 +6,7 @@ import datetime
 import os
 import sqlite3
 from src.config import WEB_HOST, WEB_PORT, ITEMS_PER_PAGE
-from src.database.operations import get_cities, get_lessons, get_weekly_lessons, get_teachers, get_connection
+from src.database.operations import get_cities, get_lessons, get_weekly_lessons, get_teachers, get_connection, get_teachers_by_city
 
 app = Flask(__name__)
 
@@ -270,9 +270,19 @@ def api_teacher_lessons():
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
+    # Get teacher name
+    cursor.execute("SELECT name FROM teachers WHERE id = ?", (teacher_id,))
+    teacher = cursor.fetchone()
+    if not teacher:
+        conn.close()
+        return jsonify({'error': 'Teacher not found'}), 404
+    
+    teacher_name = teacher['name']
+    
     query = '''
     SELECT
         l.id,
+        m.id as module_id,
         m.name as module_name,
         t.title as topic_title,
         c.name as city_name,
@@ -299,10 +309,31 @@ def api_teacher_lessons():
     cursor.execute(query, params)
     lessons = cursor.fetchall()
     
-    # Convert lessons to list of dictionaries
-    lessons_list = []
+    # Group lessons by module
+    modules = {}
+    
+    # Get all modules first
+    cursor.execute("SELECT id, name FROM modules ORDER BY id")
+    all_modules = cursor.fetchall()
+    
+    for module in all_modules:
+        modules[module['name']] = {
+            'count': 0,
+            'lessons': []
+        }
+    
+    # Add lessons to their modules
     for lesson in lessons:
-        lessons_list.append({
+        module_name = lesson['module_name']
+        
+        if module_name not in modules:
+            modules[module_name] = {
+                'count': 0,
+                'lessons': []
+            }
+        
+        modules[module_name]['count'] += 1
+        modules[module_name]['lessons'].append({
             'id': lesson['id'],
             'module_name': lesson['module_name'],
             'topic_title': lesson['topic_title'],
@@ -316,7 +347,28 @@ def api_teacher_lessons():
     
     # Return results as JSON
     return jsonify({
-        'lessons': lessons_list
+        'teacher_name': teacher_name,
+        'modules': modules
+    })
+
+@app.route('/api/teachers_by_city')
+def api_teachers_by_city():
+    """API for getting teachers filtered by city."""
+    city_id = request.args.get('city_id', type=int)
+    
+    # Get teachers from database
+    teachers = get_teachers_by_city(city_id)
+    
+    # Convert to list of dicts
+    teachers_list = []
+    for teacher in teachers:
+        teachers_list.append({
+            'id': teacher['id'],
+            'name': teacher['name']
+        })
+    
+    return jsonify({
+        'teachers': teachers_list
     })
 
 def run_web_interface(host=None, port=None, debug=False):
