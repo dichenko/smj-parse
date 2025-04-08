@@ -4,8 +4,9 @@ Web interface for Smart-J Data Collector.
 from flask import Flask, render_template, request, jsonify, redirect
 import datetime
 import os
+import sqlite3
 from src.config import WEB_HOST, WEB_PORT, ITEMS_PER_PAGE
-from src.database.operations import get_cities, get_lessons, get_weekly_lessons
+from src.database.operations import get_cities, get_lessons, get_weekly_lessons, get_teachers, get_connection
 
 app = Flask(__name__)
 
@@ -38,6 +39,15 @@ def junior():
     # Get cities for filters
     cities = get_cities()
     return render_template('index.html', cities=cities)
+
+@app.route('/tutors')
+def tutors():
+    """Tutors page."""
+    # Get cities for filters
+    cities = get_cities()
+    # Get teachers for filters
+    teachers = get_teachers()
+    return render_template('tutors.html', cities=cities, teachers=teachers)
 
 @app.route('/weekly')
 @app.route('/weekly/<start_date>')
@@ -243,6 +253,70 @@ def api_lessons():
     return jsonify({
         'lessons': lessons_list,
         'pagination': result['pagination']
+    })
+
+@app.route('/api/teacher_lessons')
+def api_teacher_lessons():
+    """API for getting lessons by teacher."""
+    # Get request parameters
+    teacher_id = request.args.get('teacher_id', type=int)
+    city_id = request.args.get('city_id', type=int)
+    
+    if not teacher_id:
+        return jsonify({'error': 'Teacher ID is required'}), 400
+    
+    # Get lessons from database
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    query = '''
+    SELECT
+        l.id,
+        m.name as module_name,
+        t.title as topic_title,
+        c.name as city_name,
+        tc.name as teacher_name,
+        l.date,
+        l.group_name
+    FROM lessons l
+    JOIN topics t ON l.topic_id = t.id
+    JOIN modules m ON t.module_id = m.id
+    JOIN cities c ON l.city_id = c.id
+    JOIN teachers tc ON l.teacher_id = tc.id
+    WHERE l.teacher_id = ?
+    '''
+    
+    params = [teacher_id]
+    
+    if city_id:
+        query += ' AND l.city_id = ?'
+        params.append(city_id)
+    
+    # Add sorting by date (newest first)
+    query += ' ORDER BY l.date DESC'
+    
+    cursor.execute(query, params)
+    lessons = cursor.fetchall()
+    
+    # Convert lessons to list of dictionaries
+    lessons_list = []
+    for lesson in lessons:
+        lessons_list.append({
+            'id': lesson['id'],
+            'module_name': lesson['module_name'],
+            'topic_title': lesson['topic_title'],
+            'city_name': lesson['city_name'],
+            'teacher_name': lesson['teacher_name'],
+            'date': lesson['date'],
+            'group_name': lesson['group_name']
+        })
+    
+    conn.close()
+    
+    # Return results as JSON
+    return jsonify({
+        'lessons': lessons_list
     })
 
 def run_web_interface(host=None, port=None, debug=False):

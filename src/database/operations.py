@@ -116,6 +116,18 @@ def get_cities():
     conn.close()
     return cities
 
+def get_teachers():
+    """Get all teachers from database."""
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, name FROM teachers")
+    teachers = cursor.fetchall()
+
+    conn.close()
+    return teachers
+
 def get_lessons(module_id=None, city_id=None, page=1, per_page=10, start_date=None, end_date=None):
     """Get lessons with pagination and filtering."""
     # start_date and end_date should be in format 'YYYY-MM-DD'
