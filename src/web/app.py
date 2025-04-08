@@ -10,7 +10,7 @@ from src.database.operations import get_cities, get_lessons, get_weekly_lessons
 app = Flask(__name__)
 
 # Set template folder
-template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'templates'))
+template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates'))
 app.template_folder = template_dir
 
 @app.route('/')
@@ -255,9 +255,6 @@ def run_web_interface(host=None, port=None, debug=False):
     """
     # Create templates directory if it doesn't exist
     os.makedirs(app.template_folder, exist_ok=True)
-
-    # Create index template if it doesn't exist
-    create_index_template()
     
     # Run the app
     app.run(
