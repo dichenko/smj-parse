@@ -6,8 +6,10 @@ This script can be run independently as a service.
 import logging
 from src.utils.logger import setup_logging
 from src.database.schema import create_database
-from src.web.app import run_web_interface
+from src.web.app import app, run_web_interface
 
+# Определяем переменную app для совместимости с Gunicorn
+# app экспортируется из модуля src.web.app
 
 def start_web_server():
     """Start the web interface for Smart-J Data."""
