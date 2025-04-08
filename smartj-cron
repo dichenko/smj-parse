@@ -1,0 +1,2 @@
+# Запускать сбор данных каждый день в 08:00
+0 8 * * * /path/to/smj-parse/venv/bin/python /path/to/smj-parse/collect_data.py >> /path/to/smj-parse/logs/cron.log 2>&1 

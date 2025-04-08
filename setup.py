@@ -9,10 +9,13 @@ setup(
         "beautifulsoup4>=4.13.0",
         "flask>=3.0.0",
         "urllib3>=2.0.0",
+        "python-dotenv>=1.1.0",
     ],
     entry_points={
         "console_scripts": [
             "smart-j-collector=main:main",
+            "smart-j-web=run_web:start_web_server",
+            "smart-j-parse=collect_data:collect_data",
         ],
     },
     python_requires=">=3.7",

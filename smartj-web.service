@@ -1,0 +1,15 @@
+[Unit]
+Description=Smart-J Web Interface
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/path/to/smj-parse
+Environment=PYTHONPATH=/path/to/smj-parse
+ExecStart=/path/to/smj-parse/venv/bin/python run_web.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target 

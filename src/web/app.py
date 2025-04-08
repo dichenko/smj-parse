@@ -10,7 +10,7 @@ from src.database.operations import get_cities, get_lessons, get_weekly_lessons
 app = Flask(__name__)
 
 # Set template folder
-template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates'))
+template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'templates'))
 app.template_folder = template_dir
 
 @app.route('/')
@@ -245,16 +245,26 @@ def api_lessons():
         'pagination': result['pagination']
     })
 
-def run_web_interface():
-    """Run web interface."""
+def run_web_interface(host=None, port=None, debug=False):
+    """Run web interface.
+    
+    Args:
+        host (str, optional): Host to listen on. Defaults to config value.
+        port (int, optional): Port to listen on. Defaults to config value.
+        debug (bool, optional): Run in debug mode. Defaults to False.
+    """
     # Create templates directory if it doesn't exist
-    os.makedirs(template_dir, exist_ok=True)
+    os.makedirs(app.template_folder, exist_ok=True)
 
-    # Create index.html template
+    # Create index template if it doesn't exist
     create_index_template()
-
-    # Run Flask app
-    app.run(host=WEB_HOST, port=WEB_PORT, debug=True)
+    
+    # Run the app
+    app.run(
+        host=host or WEB_HOST,
+        port=port or WEB_PORT,
+        debug=debug
+    )
 
 def create_index_template():
     """Create index.html template."""

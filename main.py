@@ -1,40 +1,15 @@
+#!/usr/bin/env python
 """
 Main script for Smart-J Data Collector.
+Provides backward compatibility with both data collection and web interface
+functionality, but delegates to specialized scripts.
 """
 import argparse
+import sys
 import logging
-from src.utils.logger import setup_logging
-from src.database.schema import create_database
-from src.parsers.auth import login
-from src.parsers.lesson_parser import collect_all_data
-from src.database.operations import save_lessons_to_db
-from src.web.app import run_web_interface
+from collect_data import collect_data
+from run_web import start_web_server
 
-def collect_data():
-    """Collect data from Smart-J website."""
-    logger = setup_logging(level=logging.DEBUG)
-    logger.info("Starting data collection...")
-    
-    # Create database schema
-    create_database()
-    
-    # Login to website
-    session = login()
-    if not session:
-        logger.error("Failed to login. Exiting.")
-        return False
-    
-    # Collect data from all modules
-    all_lessons_data = collect_all_data(session)
-    
-    # Save data to database
-    if all_lessons_data:
-        new_lessons, existing_lessons = save_lessons_to_db(all_lessons_data)
-        logger.info(f"Data collection complete. Added {new_lessons} new lessons, {existing_lessons} already existed.")
-        return True
-    else:
-        logger.error("No data collected.")
-        return False
 
 def main():
     """Main function."""
@@ -46,14 +21,17 @@ def main():
     args = parser.parse_args()
     
     if args.collect:
-        collect_data()
+        sys.exit(0 if collect_data() else 1)
     elif args.web:
-        run_web_interface()
+        start_web_server()
     elif args.all:
         if collect_data():
-            run_web_interface()
+            start_web_server()
+        else:
+            sys.exit(1)
     else:
         parser.print_help()
+
 
 if __name__ == "__main__":
     main()
