@@ -74,7 +74,3 @@ python run_web.py
 ```bash
 python collect_data.py
 ```
-
-### Запуск обоих компонентов (старый способ)
-```bash
-python main.py --all 
